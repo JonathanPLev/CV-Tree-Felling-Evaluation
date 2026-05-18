@@ -40,7 +40,7 @@ def get_dot_centers(mask: np.ndarray, min_area: int = 3, max_area:int = 80):
     return centers
 
 
-def estimate_tree_box(image: NDArray[np.uint8], cx: int, cy: int) -> tuple[int, int, int, int]:
+def estimate_tree_box(image: np.ndarray, cx: int, cy: int) -> tuple[int, int, int, int]:
     """
     Estimated a bounding box around a tree given its dot center. Size of the box is
     based on where the dot is vertically: dots lower in the image are closer
@@ -48,7 +48,7 @@ def estimate_tree_box(image: NDArray[np.uint8], cx: int, cy: int) -> tuple[int, 
     so they get a smaller one.
 
     Args:
-        image (NDArray[np.uint8]): original image to get dimensions from
+        image (np.ndarray): original image to get dimensions from
         cx (int): x coordinate of the center of the dot
         cy (int): y coordinate of the center of the dot
 
@@ -68,43 +68,29 @@ def estimate_tree_box(image: NDArray[np.uint8], cx: int, cy: int) -> tuple[int, 
         min(h, cy + half)
     )
 
-
-def is_surrounded_by_bark(hsv_image: NDArray[np.uint8], cx: int, cy: int, ring_radius: int = 10) -> bool:
+def bbox_to_yolo(x1: int, y1: int, x2: int, y2: int, img_w: int, img_h: int) -> tuple[float, float, float, float]:
     """
-    Trying to determine if the dot is valid or not. Validating by sampling pixels around the circle to see if it is bark.
-    This threw out the false positives.
-    
+    Converts a bounding box in pixel coordinates to YOLO format (normalized).
 
     Args:
-        hsv_image (NDArray[np.uint8]): image converted to HSV color space
-        cx (int): x coordinate of the center of the dot
-        cy (int): y coordinate of the center of the dot
-        ring_radius (int, optional): _description_. Defaults to 10.
+        x1, y1 (int): top-left corner of the bounding box
+        x2, y2 (int): bottom-right corner of the bounding box
+        img_w (int): image width in pixels
+        img_h (int): image height in pixels
 
     Returns:
-        bool: True if surrounding pixels look like bark, False otherwise
+        tuple[float, float, float, float]: (x_center, y_center, width, height) normalized 0-1
     """
-    h, w = hsv_image.shape[:2]
-    bark_count = 0
-    total = 0
-    
-    for angle in range(0, 360, 10):
-        rad = np.deg2rad(angle)
-        x = int(cx + ring_radius * np.cos(rad))
-        y = int(cy + ring_radius * np.sin(rad))
-        
-        if 0 <= x < w and 0 <= y < h:
-            hue, sat, val = hsv_image[y, x]
-            
-            if sat < 50 and 50 < val < 180:
-                bark_count += 1
-            total += 1
-
-    return (bark_count / total) > 0.6 if total > 0 else False
+    x_center = ((x1 + x2) / 2) / img_w
+    y_center = ((y1 + y2) / 2) / img_h
+    width = (x2 - x1) / img_w
+    height = (y2 - y1) / img_h
+    return x_center, y_center, width, height
 
 # Testing one image
-image = cv2.imread("IMG_1943.jpg")
+image = cv2.imread("IMG_1947.jpg")
 hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+img_w, img_h = image.shape[:2]
 
 # Red wraps in HSV so we need two ranges
 red_mask = (
@@ -112,32 +98,32 @@ red_mask = (
     cv2.inRange(hsv, np.array([175, 200, 200]), np.array([180, 255, 255]))
 )
 
-green_mask = cv2.inRange(hsv, np.array([42, 150, 150]), np.array([55, 255, 255]))
-green_mask = cv2.dilate(green_mask, np.ones((3, 3), np.uint8), iterations=1)
+
+green_mask = cv2.inRange(hsv, np.array([44, 180, 150]), np.array([55, 235, 210]))
 
 red_centers = get_dot_centers(red_mask)
-green_centers = [
-    (cx, cy) for (cx, cy) in get_dot_centers(green_mask)
-    if is_surrounded_by_bark(hsv, cx, cy)
-]
+green_centers = get_dot_centers(green_mask)  # no bark filter needed
 
-print(f"Found {len(red_centers)} healthy trees, {len(green_centers)} trees to cut down.")
+print(f"Found {len(red_centers)} healthy trees (Class 0), {len(green_centers)} trees to cut down (Class 1).")
 
-annotations = []
+
+lines = []
 output_image = image.copy()
 
-for i, (cx, cy) in enumerate(red_centers):
+for cx, cy in red_centers:
     x1, y1, x2, y2 = estimate_tree_box(image, cx, cy)
-    annotations.append({"tree_id": i + 1, "label": "healthy", "bbox": [x1, y1, x2, y2]})
+    xc, yc, bw, bh = bbox_to_yolo(x1, y1, x2, y2, img_w, img_h)
+    lines.append(f"0 {xc:.4f} {yc:.4f} {bw:.4f} {bh:.4f}  # Safe Tree (Class 0)")
     cv2.rectangle(output_image, (x1, y1), (x2, y2), (0, 0, 255), 2)
 
-for i, (cx, cy) in enumerate(green_centers):
+for cx, cy in green_centers:
     x1, y1, x2, y2 = estimate_tree_box(image, cx, cy)
-    annotations.append({"tree_id": len(red_centers) + i + 1, "label": "diseased", "bbox": [x1, y1, x2, y2]})
+    xc, yc, bw, bh = bbox_to_yolo(x1, y1, x2, y2, img_w, img_h)
+    lines.append(f"1 {xc:.4f} {yc:.4f} {bw:.4f} {bh:.4f}  # Diseased Tree (Class 1)")
     cv2.rectangle(output_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
 cv2.imwrite("output_boxes.jpg", output_image)
-with open("annotations.json", "w") as f:
-    json.dump(annotations, f, indent=2)
+with open("annotations.txt", "w") as f:
+    f.write("\n".join(lines))
 
-# print("Saved output_boxes.jpg and annotations.json")
+print("Saved output_boxes.jpg and annotations.json")
