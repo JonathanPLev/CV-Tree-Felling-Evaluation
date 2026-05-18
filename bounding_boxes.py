@@ -87,10 +87,52 @@ def bbox_to_yolo(x1: int, y1: int, x2: int, y2: int, img_w: int, img_h: int) -> 
     height = (y2 - y1) / img_h
     return x_center, y_center, width, height
 
+def draw_boxes(image: np.ndarray, centers: list[tuple[int, int]], color_bgr: tuple[int, int, int], class_label: str) -> np.ndarray:
+    """
+    Draws bounding boxes, dot centers, and class labels onto the image.
+    
+    Args:
+        image (np.ndarray): The image to annotate (modified in-place).
+        centers (list[tuple[int, int]]): List of (cx, cy) dot center coordinates.
+        color_bgr (tuple[int, int, int]): BGR color for boxes and dot markers.
+        class_label (str): Text label shown above each bounding box.
+    Returns:
+        np.ndarray: The annotated image.
+    """
+    for cx, cy in centers:
+        x1, y1, x2, y2 = estimate_tree_box(image, cx, cy)
+        
+        # Bounding box
+        cv2.rectangle(image, (x1, y1), (x2, y2), color_bgr, thickness=2)
+        
+        # Dot center crosshair
+        cv2.drawMarker(image, (cx, cy), color_bgr, markerType=cv2.MARKER_CROSS, markerSize=10, thickness=2)
+        
+        # # Label background + text
+        # label_size, baseline = cv2.getTextSize(class_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        # label_y = max(y1 - 4, label_size[1] + 4)
+        # cv2.rectangle(
+        #     image,
+        #     (x1, label_y - label_size[1] - 4),
+        #     (x1 + label_size[0] + 4, label_y + baseline),
+        #     color_bgr,
+        #     thickness=cv2.FILLED,
+        # )
+
+    return image
+
+
+# Running the script
 images_dir = "../forest_images"
 output_dir = "output_labels"
-# Check if output folder exists, if not create it
+annotated_dir = "../output_images"
+
 os.makedirs(output_dir, exist_ok=True)
+os.makedirs(annotated_dir, exist_ok=True)
+
+# BGR colors matching the original dot colors
+COLOR_SAFE   = (0,   0,   220)  # red — safe trees (Class 0)
+COLOR_UNSAFE = (0,   200, 0  )  # green — unsafe trees (Class 1)
 
 for filename in os.listdir(images_dir):
     if not filename.endswith(".jpg"):
@@ -102,25 +144,24 @@ for filename in os.listdir(images_dir):
         continue
 
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    # Image's height and width for normalizaiton of bounding box coordinates
     img_h, img_w = image.shape[:2]
 
     # Red wraps in HSV so we need two ranges
     red_mask = (
-        cv2.inRange(hsv, np.array([0, 200, 200]), np.array([5, 255, 255])) |
+        cv2.inRange(hsv, np.array([0,   200, 200]), np.array([5,   255, 255])) |
         cv2.inRange(hsv, np.array([175, 200, 200]), np.array([180, 255, 255]))
     )
 
-    # Green dot HSV values sampled from real images: H~48, S~200-225, V~185-190
+    # Green dot HSV values 
     green_mask = cv2.inRange(hsv, np.array([44, 180, 150]), np.array([55, 235, 210]))
 
-    red_centers = get_dot_centers(red_mask)
+    red_centers   = get_dot_centers(red_mask)
     green_centers = get_dot_centers(green_mask)
 
     print(f"{image_path}: {len(red_centers)} safe trees (Class 0), {len(green_centers)} unsafe trees (Class 1).")
 
+    # Txt file creation in normalized format
     lines = []
-
     for cx, cy in red_centers:
         x1, y1, x2, y2 = estimate_tree_box(image, cx, cy)
         xc, yc, bw, bh = bbox_to_yolo(x1, y1, x2, y2, img_w, img_h)
@@ -131,10 +172,18 @@ for filename in os.listdir(images_dir):
         xc, yc, bw, bh = bbox_to_yolo(x1, y1, x2, y2, img_w, img_h)
         lines.append(f"1 {xc:.4f} {yc:.4f} {bw:.4f} {bh:.4f}  # Unsafe Tree (Class 1)")
 
-    stem = image_path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    stem = filename.rsplit(".", 1)[0]
     txt_path = f"{output_dir}/{stem}.txt"
     with open(txt_path, "w") as f:
         f.write("\n".join(lines))
-
-# Check
     print(f"Saved {txt_path}")
+
+    # Bounding Box Image
+    annotated = image.copy()
+    draw_boxes(annotated, red_centers,   COLOR_SAFE,   "Safe (0)")
+    draw_boxes(annotated, green_centers, COLOR_UNSAFE, "Unsafe (1)")
+
+    jpg_path = f"{annotated_dir}/{stem}_annotated.jpg"
+    cv2.imwrite(jpg_path, annotated, [cv2.IMWRITE_JPEG_QUALITY, 92])
+    print(f"Saved {jpg_path}")
+
