@@ -1,5 +1,5 @@
 import cv2
-import json
+import os
 import numpy as np
 
 
@@ -87,43 +87,54 @@ def bbox_to_yolo(x1: int, y1: int, x2: int, y2: int, img_w: int, img_h: int) -> 
     height = (y2 - y1) / img_h
     return x_center, y_center, width, height
 
-# Testing one image
-image = cv2.imread("IMG_1947.jpg")
-hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-img_w, img_h = image.shape[:2]
+images_dir = "../forest_images"
+output_dir = "output_labels"
+# Check if output folder exists, if not create it
+os.makedirs(output_dir, exist_ok=True)
 
-# Red wraps in HSV so we need two ranges
-red_mask = (
-    cv2.inRange(hsv, np.array([0, 200, 200]), np.array([5, 255, 255])) |
-    cv2.inRange(hsv, np.array([175, 200, 200]), np.array([180, 255, 255]))
-)
+for filename in os.listdir(images_dir):
+    if not filename.endswith(".jpg"):
+        continue
+    image_path = f"{images_dir}/{filename}"
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Could not read {image_path}, skipping.")
+        continue
 
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    # Image's height and width for normalizaiton of bounding box coordinates
+    img_h, img_w = image.shape[:2]
 
-green_mask = cv2.inRange(hsv, np.array([44, 180, 150]), np.array([55, 235, 210]))
+    # Red wraps in HSV so we need two ranges
+    red_mask = (
+        cv2.inRange(hsv, np.array([0, 200, 200]), np.array([5, 255, 255])) |
+        cv2.inRange(hsv, np.array([175, 200, 200]), np.array([180, 255, 255]))
+    )
 
-red_centers = get_dot_centers(red_mask)
-green_centers = get_dot_centers(green_mask)  # no bark filter needed
+    # Green dot HSV values sampled from real images: H~48, S~200-225, V~185-190
+    green_mask = cv2.inRange(hsv, np.array([44, 180, 150]), np.array([55, 235, 210]))
 
-print(f"Found {len(red_centers)} healthy trees (Class 0), {len(green_centers)} trees to cut down (Class 1).")
+    red_centers = get_dot_centers(red_mask)
+    green_centers = get_dot_centers(green_mask)
 
+    print(f"{image_path}: {len(red_centers)} safe trees (Class 0), {len(green_centers)} unsafe trees (Class 1).")
 
-lines = []
-output_image = image.copy()
+    lines = []
 
-for cx, cy in red_centers:
-    x1, y1, x2, y2 = estimate_tree_box(image, cx, cy)
-    xc, yc, bw, bh = bbox_to_yolo(x1, y1, x2, y2, img_w, img_h)
-    lines.append(f"0 {xc:.4f} {yc:.4f} {bw:.4f} {bh:.4f}  # Safe Tree (Class 0)")
-    cv2.rectangle(output_image, (x1, y1), (x2, y2), (0, 0, 255), 2)
+    for cx, cy in red_centers:
+        x1, y1, x2, y2 = estimate_tree_box(image, cx, cy)
+        xc, yc, bw, bh = bbox_to_yolo(x1, y1, x2, y2, img_w, img_h)
+        lines.append(f"0 {xc:.4f} {yc:.4f} {bw:.4f} {bh:.4f}  # Safe Tree (Class 0)")
 
-for cx, cy in green_centers:
-    x1, y1, x2, y2 = estimate_tree_box(image, cx, cy)
-    xc, yc, bw, bh = bbox_to_yolo(x1, y1, x2, y2, img_w, img_h)
-    lines.append(f"1 {xc:.4f} {yc:.4f} {bw:.4f} {bh:.4f}  # Diseased Tree (Class 1)")
-    cv2.rectangle(output_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    for cx, cy in green_centers:
+        x1, y1, x2, y2 = estimate_tree_box(image, cx, cy)
+        xc, yc, bw, bh = bbox_to_yolo(x1, y1, x2, y2, img_w, img_h)
+        lines.append(f"1 {xc:.4f} {yc:.4f} {bw:.4f} {bh:.4f}  # Unsafe Tree (Class 1)")
 
-cv2.imwrite("output_boxes.jpg", output_image)
-with open("annotations.txt", "w") as f:
-    f.write("\n".join(lines))
+    stem = image_path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    txt_path = f"{output_dir}/{stem}.txt"
+    with open(txt_path, "w") as f:
+        f.write("\n".join(lines))
 
-print("Saved output_boxes.jpg and annotations.json")
+# Check
+    print(f"Saved {txt_path}")
