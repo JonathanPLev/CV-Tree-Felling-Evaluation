@@ -121,27 +121,27 @@ def draw_boxes(image: np.ndarray, centers: list[tuple[int, int]], color_bgr: tup
 
     return image
 
+def main() -> None:
+    # Running the script
+    images_dir = "../forest_images"
+    output_dir = "output_labels"
+    annotated_dir = "../output_images"
 
-# Running the script
-images_dir = "../forest_images"
-output_dir = "output_labels"
-annotated_dir = "../output_images"
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(annotated_dir, exist_ok=True)
 
-os.makedirs(output_dir, exist_ok=True)
-os.makedirs(annotated_dir, exist_ok=True)
+    # BGR colors matching the original dot colors
+    COLOR_SAFE   = (0,   0,   220)  # red — safe trees (Class 0)
+    COLOR_UNSAFE = (0,   200, 0  )  # green — unsafe trees (Class 1)
 
-# BGR colors matching the original dot colors
-COLOR_SAFE   = (0,   0,   220)  # red — safe trees (Class 0)
-COLOR_UNSAFE = (0,   200, 0  )  # green — unsafe trees (Class 1)
-
-for filename in os.listdir(images_dir):
-    if not filename.endswith(".jpg"):
-        continue
-    image_path = f"{images_dir}/{filename}"
-    image = cv2.imread(image_path)
-    if image is None:
-        print(f"Could not read {image_path}, skipping.")
-        continue
+    for filename in os.listdir(images_dir):
+        if not filename.endswith(".jpg"):
+            continue
+        image_path = f"{images_dir}/{filename}"
+        image = cv2.imread(image_path)
+        if image is None:
+            print(f"Could not read {image_path}, skipping.")
+            continue
 
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     img_h, img_w = image.shape[:2]
@@ -158,7 +158,7 @@ for filename in os.listdir(images_dir):
     red_centers   = get_dot_centers(red_mask)
     green_centers = get_dot_centers(green_mask)
 
-    print(f"{image_path}: {len(red_centers)} safe trees (Class 0), {len(green_centers)} unsafe trees (Class 1).")
+        print(f"{image_path}: {len(red_centers)} safe trees (Class 0), {len(green_centers)} unsafe trees (Class 1).")
 
     # Txt file creation in normalized format
     lines = []
@@ -167,10 +167,13 @@ for filename in os.listdir(images_dir):
         xc, yc, bw, bh = bbox_to_yolo(x1, y1, x2, y2, img_w, img_h)
         lines.append(f"0 {xc:.4f} {yc:.4f} {bw:.4f} {bh:.4f}  # Safe Tree (Class 0)")
 
-    for cx, cy in green_centers:
-        x1, y1, x2, y2 = estimate_tree_box(image, cx, cy)
-        xc, yc, bw, bh = bbox_to_yolo(x1, y1, x2, y2, img_w, img_h)
-        lines.append(f"1 {xc:.4f} {yc:.4f} {bw:.4f} {bh:.4f}  # Unsafe Tree (Class 1)")
+        for cx, cy in green_centers:
+            x1, y1, x2, y2 = estimate_tree_box(image, cx, cy)
+            xc, yc, bw, bh = bbox_to_yolo(x1, y1, x2, y2, img_w, img_h)
+            lines.append(f"1 {xc:.4f} {yc:.4f} {bw:.4f} {bh:.4f}  # Unsafe Tree (Class 1)")
+            cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.circle(image, (cx, cy), 3, (0, 255, 0), -1)
+            cv2.putText(image, "Unsafe Tree", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
 
     stem = filename.rsplit(".", 1)[0]
     txt_path = f"{output_dir}/{stem}.txt"
@@ -187,3 +190,5 @@ for filename in os.listdir(images_dir):
     cv2.imwrite(jpg_path, annotated, [cv2.IMWRITE_JPEG_QUALITY, 92])
     print(f"Saved {jpg_path}")
 
+if __name__ == "__main__":
+    main()
