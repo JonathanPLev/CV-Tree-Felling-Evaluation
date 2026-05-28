@@ -1,0 +1,16 @@
+# 30/30 iterations complete ✅ (2319.53s)
+# Results saved to /content/runs/detect/tune
+# Best fitness=0.23327 observed at iteration 27
+# Best fitness metrics are {'metrics/precision(B)': 0.24946, 'metrics/recall(B)': 0.36111, 'metrics/mAP50(B)': 0.29656, 'metrics/mAP50-95(B)': 0.23327, 'val/box_loss': 2.53214, 'val/cls_loss': 8.31283, 'val/dfl_loss': 2.26452, 'fitness': 0.23327}
+# Best fitness model is /content/runs/detect/tune/weights
+lr0: 0.00012
+lrf: 0.00558
+momentum: 0.90988
+weight_decay: 3.0e-05
+cls: 1.71495
+box: 5.48261
+hsv_h: 0.00547
+hsv_s: 0.59083
+hsv_v: 0.24135
+scale: 0.3
+fliplr: 0.49007

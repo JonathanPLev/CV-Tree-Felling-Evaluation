@@ -1,0 +1,14 @@
+# 1. Path setup
+path: datasets  # The root directory of your data
+train: images/train              # Train images (relative to path)
+val: images/val                  # Val images (relative to path)
+# test: images/test              # Optional: images/test
+
+# 2. Class Definitions
+nc: 2                            # Number of classes
+names:
+  0: red                   
+  1: green              
+
+# 3. Special Metadata (Optional but helpful for Step 4)
+description: "CV Model for determining tree-felling safety in dense forests."
