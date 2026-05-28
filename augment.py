@@ -4,17 +4,23 @@ import albumentations as A
 
 # #Config
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 IMAGE_DIR = "images/original_images"
 LABEL_DIR = "labels/output_labels"
 OUTPUT_DIR = "images/augmented_images"
 LABEL_OUTPUT_DIR = "labels/augmented_labels"
 IMAGE_NAMES = ["IMG_1943", "IMG_1944", "IMG_1945", "IMG_1946", "IMG_1947"]
 =======
+=======
+>>>>>>> Stashed changes
 IMAGE_DIR = "ml/datasets/images/train"
 LABEL_DIR = "ml/datasets/labels/train"
 OUTPUT_DIR = "images/augmented_images-1"
 LABEL_OUTPUT_DIR = "labels/augmented_labels-1"
 IMAGE_NAMES = ["IMG_1943", "IMG_1944", "IMG_1946", "IMG_1947"] # hold out IMG_1945 for now
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 IMG_EXT = ".jpg"
 

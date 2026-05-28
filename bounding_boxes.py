@@ -138,6 +138,7 @@ def main() -> None:
         if not filename.endswith(".jpg"):
             continue
 
+
         image_path = f"{images_dir}/{filename}"
         image = cv2.imread(image_path)
         if image is None:
@@ -159,6 +160,10 @@ def main() -> None:
     red_centers   = get_dot_centers(red_mask)
     green_centers = get_dot_centers(green_mask)
 
+        print(
+            f"{image_path}: {len(red_centers)} safe trees (Class 0), "
+            f"{len(green_centers)} unsafe trees (Class 1)."
+        )
         print(
             f"{image_path}: {len(red_centers)} safe trees (Class 0), "
             f"{len(green_centers)} unsafe trees (Class 1)."
