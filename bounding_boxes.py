@@ -137,6 +137,7 @@ def main() -> None:
     for filename in os.listdir(images_dir):
         if not filename.endswith(".jpg"):
             continue
+
         image_path = f"{images_dir}/{filename}"
         image = cv2.imread(image_path)
         if image is None:
@@ -158,7 +159,10 @@ def main() -> None:
     red_centers   = get_dot_centers(red_mask)
     green_centers = get_dot_centers(green_mask)
 
-        print(f"{image_path}: {len(red_centers)} safe trees (Class 0), {len(green_centers)} unsafe trees (Class 1).")
+        print(
+            f"{image_path}: {len(red_centers)} safe trees (Class 0), "
+            f"{len(green_centers)} unsafe trees (Class 1)."
+        )
 
     # Txt file creation in normalized format
     lines = []
@@ -171,9 +175,6 @@ def main() -> None:
             x1, y1, x2, y2 = estimate_tree_box(image, cx, cy)
             xc, yc, bw, bh = bbox_to_yolo(x1, y1, x2, y2, img_w, img_h)
             lines.append(f"1 {xc:.4f} {yc:.4f} {bw:.4f} {bh:.4f}  # Unsafe Tree (Class 1)")
-            cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.circle(image, (cx, cy), 3, (0, 255, 0), -1)
-            cv2.putText(image, "Unsafe Tree", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
 
     stem = filename.rsplit(".", 1)[0]
     txt_path = f"{output_dir}/{stem}.txt"

@@ -11,7 +11,7 @@ from ultralytics import YOLO
 
 DATA_YAML = "forest_safety.yaml"
 MODEL_NAME = "yolov8n.pt"
-TARGET_CLASS_NAME = os.getenv("TARGET_CLASS_NAME", "Unsafe Tree")
+TARGET_CLASS_NAME = os.getenv("TARGET_CLASS_NAME", "green")
 TARGET_CLASS_INDEX = os.getenv("TARGET_CLASS_INDEX", "1")
 
 
@@ -182,36 +182,53 @@ def evaluate_decision_metric(model: YOLO, data_yaml: str, iou_match: float = 0.1
 def main() -> None:
     model = YOLO(MODEL_NAME)
 
-    # Step 2: prioritize classification correctness over localization.
-    train_args = dict(
+    # Stage 1: head-focused training for tiny datasets to reduce overfitting.
+    stage1_args = dict(
         data=DATA_YAML,
-        epochs=150,
-        imgsz=640,
+        epochs=80,
+        patience=12,
+        imgsz=512,
         batch=8,
-        patience=30,
         device=0,
         pretrained=True,
-        freeze=10,
+        freeze=15,
         optimizer="AdamW",
-        lr0=0.001,
-        lrf=0.01,
-        weight_decay=0.0005,
-        hsv_h=0.015,
-        hsv_s=0.5,
-        hsv_v=0.3,
-        degrees=5,
-        translate=0.05,
-        scale=0.2,
-        fliplr=0.5,
-        mosaic=0.3,
-        mixup=0.0,
-        close_mosaic=10,
-        cls=1.8,
-        box=5.0,
+        lr0=0.00012,
+        lrf=0.00558,
+        momentum=0.90988,
+        weight_decay=3.0e-05,
+        hsv_h=0.00547,
+        hsv_s=0.59083,
+        hsv_v=0.24135,
+        degrees=4.0,
+        translate=0.06,
+        scale=0.3,
+        shear=0.0,
+        perspective=0.0,
+        fliplr=0.49007,
+        flipud=0.0,
+        mosaic=0.5,
+        mixup=0.15,
+        copy_paste=0.0,
+        close_mosaic=12,
+        cls=1.71495,
+        box=5.48261,
+        dfl=1.0,
+        seed=42,
+        deterministic=True,
         plots=True,
     )
+    model.train(**stage1_args)
 
-    model.train(**train_args)
+    # Stage 2: short full-model fine-tune with lower LR.
+    stage2_args = dict(stage1_args)
+    stage2_args.update(
+        epochs=30,
+        patience=8,
+        freeze=0,
+        lr0=0.00006,
+    )
+    model.train(**stage2_args)
 
     # Step 1: choose checkpoint by target-class decision metric, not default detector fitness.
     best_ckpt = model.trainer.best
@@ -234,33 +251,33 @@ def main() -> None:
     )
 
     # Step 3: tune around classification-sensitive hyperparameters.
-    tune_space = {
-        "lr0": (1e-5, 2e-3),
-        "lrf": (0.005, 0.05),
-        "momentum": (0.85, 0.98),
-        "weight_decay": (1e-5, 1e-3),
-        "cls": (1.2, 3.0),
-        "box": (3.0, 6.0),
-        "hsv_h": (0.0, 0.02),
-        "hsv_s": (0.2, 0.6),
-        "hsv_v": (0.1, 0.4),
-        "scale": (0.05, 0.3),
-        "fliplr": (0.0, 0.5),
-    }
+    # tune_space = {
+    #     "lr0": (1e-5, 2e-3),
+    #     "lrf": (0.005, 0.05),
+    #     "momentum": (0.85, 0.98),
+    #     "weight_decay": (1e-5, 1e-3),
+    #     "cls": (1.2, 3.0),
+    #     "box": (3.0, 6.0),
+    #     "hsv_h": (0.0, 0.02),
+    #     "hsv_s": (0.2, 0.6),
+    #     "hsv_v": (0.1, 0.4),
+    #     "scale": (0.05, 0.3),
+    #     "fliplr": (0.0, 0.5),
+    # }
 
-    selected_model.tune(
-        data=DATA_YAML,
-        epochs=80,
-        iterations=30,
-        optimizer="AdamW",
-        imgsz=640,
-        batch=8,
-        space=tune_space,
-        plots=True,
-        val=True,
-    )
+    # selected_model.tune(
+    #     data=DATA_YAML,
+    #     epochs=80,
+    #     iterations=30,
+    #     optimizer="AdamW",
+    #     imgsz=512,
+    #     batch=8,
+    #     space=tune_space,
+    #     plots=True,
+    #     val=True,
+    # )
 
-    selected_model.export(format="coreml", imgsz=640, nms=True, half=True)
+    selected_model.export(format="coreml", imgsz=512, nms=True, half=True)
 
 
 if __name__ == "__main__":
