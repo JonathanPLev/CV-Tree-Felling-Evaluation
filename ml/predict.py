@@ -6,7 +6,7 @@ from pathlib import Path
 from ultralytics import YOLO
 
 
-DEFAULT_WEIGHTS = Path(__file__).resolve().parent / "runs/detect/train-9/weights/best.pt"
+DEFAULT_WEIGHTS = Path(__file__).resolve().parent / "runs/detect/tune-1/weights/best.pt"
 
 
 def parse_args() -> argparse.Namespace:
@@ -20,7 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--conf",
         type=float,
-        default=0.02,
+        default=0.01,
         help="Confidence threshold for inference.",
     )
     return parser.parse_args()
@@ -37,7 +37,7 @@ def main() -> None:
         raise FileNotFoundError(f"Weights not found: {weights_path}")
 
     model = YOLO(str(weights_path))
-    results = model.predict(source=str(image_path), save=True, conf=args.conf)
+    results = model.predict(source=str(image_path), save=True, conf=args.conf, iou=0.3, max_det=10)
 
     for result in results:
         print(f"Saved prediction for: {result.path}")
